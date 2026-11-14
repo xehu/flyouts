@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flyouts</title>
+<style>
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --text: #1f2328; --muted: #5f6670; --line: #e3e1dc;
+  --accent: #2f5d8a; --accent-soft: #e6eef6; --chip: #f0eee9; --warn: #8a5a00; --ok: #2d6a3e;
+  --mark: #fff1b8;
+  --shadow: 0 1px 2px rgba(0,0,0,.05); --lift: 0 8px 28px rgba(0,0,0,.16);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17191c; --panel: #1f2226; --text: #e6e6e3; --muted: #9aa1a9; --line: #33373c;
+    --accent: #8db7e0; --accent-soft: #24313d; --chip: #2a2e33; --warn: #e0b45c; --ok: #7cc48f;
+    --mark: #4a4220;
+    --shadow: none; --lift: 0 8px 28px rgba(0,0,0,.5);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+a { color: var(--accent); }
+header { padding: 14px 20px 8px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+header h1 { font-size: 18px; margin: 0; font-weight: 650; }
+#status { font-size: 13px; flex: 1; min-width: 120px; }
+header a { font-size: 13px; }
+button { font: inherit; color: var(--text); cursor: pointer; }
+.btn { font-size: 13px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 10px; }
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tabs button { border: 0; background: none; padding: 6px 12px; border-radius: 8px; font-size: 15px; }
+.tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); font-weight: 650; box-shadow: var(--shadow);
+  outline: 1px solid var(--line); }
+.controls { padding: 4px 20px 10px; display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.controls .lab { margin-right: 6px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); flex-wrap: wrap; }
+.seg button { border: 0; background: none; padding: 5px 11px; font-size: 13px; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+#find { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--text); width: 230px; }
+#find:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+label.check { display: inline-flex; gap: 6px; align-items: center; }
+#summary { padding: 0 20px 8px; font-size: 13px; }
+.legend { display: inline-flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.legend span { display: inline-flex; gap: 5px; align-items: center; }
+.swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.swatch.ring { border: 3px solid var(--accent); }
+.swatch.thin { border: 1px solid var(--muted); }
+.swatch.badge { background: var(--accent); }
+.swatch.done { background: var(--ok); }
+.swatch.sq { border-radius: 3px; border: 1px solid var(--line); background: var(--panel); width: 16px; }
+.swatch.sq.pr1 { background: var(--accent); border-color: var(--accent); }
+.swatch.sq.pr2 { background: var(--accent-soft); border-color: var(--accent-soft); }
+.swatch.sq.pr3 { border-color: var(--accent); }
+.swatch.dash { border: 1px dashed var(--text); border-radius: 3px; width: 16px; }
+
+.stage { display: flex; gap: 16px; padding: 0 20px 40px; align-items: flex-start; }
+#mapWrap { position: relative; flex: 1 1 auto; min-width: 0; }
+#map { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+#links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+#links line { stroke: var(--accent); stroke-width: 1.5; opacity: .7; }
+.cluster { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 12px;
+  box-shadow: var(--shadow); max-width: 100%; }
+.cluster h2 { font-size: 13px; font-weight: 650; margin: 0 0 8px; display: flex; gap: 8px; align-items: baseline; }
+.cluster h2 .n { font-weight: 400; }
+.nodes { display: grid; gap: 10px 4px; justify-content: start; }
+.nodes.people { grid-template-columns: repeat(auto-fill, 88px); }
+.nodes.papers { grid-template-columns: repeat(auto-fill, 184px); gap: 8px; }
+
+.node { border: 0; background: none; padding: 0; text-align: center; transition: opacity .15s; border-radius: 10px; }
+.node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.person { width: 88px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.avatar { position: relative; width: 58px; height: 58px; border-radius: 50%; background: var(--chip); color: var(--muted);
+  display: grid; place-items: center; font-weight: 650; font-size: 17px; box-shadow: 0 0 0 1px var(--line); }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.person.sched .avatar { box-shadow: 0 0 0 3px var(--accent); }
+.person.extra { opacity: .62; }
+.person.extra .avatar { box-shadow: 0 0 0 1px var(--muted); }
+.count { position: absolute; right: -5px; top: -5px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
+  background: var(--accent); color: var(--panel); font-size: 11.5px; font-weight: 650; line-height: 20px;
+  box-shadow: 0 0 0 2px var(--panel); }
+.count.done { background: var(--ok); }
+.pname { font-size: 12.5px; line-height: 1.2; font-weight: 550; max-width: 86px; overflow-wrap: anywhere; }
+.pslot { font-size: 11.5px; line-height: 1.15; }
+.paper { width: 184px; min-height: 64px; text-align: left; align-self: stretch; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; display: block; color: var(--text); }
+.paper.pr1 { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.paper.pr2 { background: var(--accent-soft); border-color: var(--accent-soft); }
+.paper.pr3 { border-color: var(--accent); }
+.paper.absent { border-style: dashed; }
+.paper > span { display: block; }
+.paper .cite { font-size: 13px; font-weight: 650; display: flex; gap: 6px; align-items: baseline; }
+.paper .hl { margin-left: auto; font-size: 11.5px; font-weight: 650; white-space: nowrap; }
+.paper .ptitle { font-size: 12px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; }
+.node.sel .avatar { box-shadow: 0 0 0 3px var(--text), 0 0 0 6px var(--accent-soft); }
+.node.paper.sel { outline: 2px solid var(--text); outline-offset: 1px; }
+.node.rel .avatar { box-shadow: 0 0 0 3px var(--warn); }
+.node.paper.rel { outline: 2px solid var(--warn); outline-offset: 1px; }
+#map.hovering .node:not(.hot) { opacity: .4; }
+#map.finding .node:not(.match) { opacity: .22; }
+.empty { padding: 30px 0; }
+
+#tip { position: fixed; z-index: 20; width: 330px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: var(--lift); padding: 12px 13px; pointer-events: none; font-size: 13px; display: none; }
+#tip .top { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+#tip .top img, #tip .top .ph { width: 54px; height: 54px; border-radius: 50%; object-fit: cover; flex: none;
+  background: var(--chip); display: grid; place-items: center; color: var(--muted); font-weight: 650; }
+#tip .nm { font-weight: 650; font-size: 14.5px; line-height: 1.25; }
+#tip .sub { line-height: 1.3; }
+#tip p { margin: 6px 0 0; }
+#tip .clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.kv b { font-weight: 650; }
+.chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+.chip { background: var(--chip); border-radius: 999px; padding: 1px 8px; font-size: 12px; }
+.chip.acc { background: var(--accent-soft); color: var(--accent); }
+.tag { display: inline-block; border-radius: 5px; padding: 0 7px; font-size: 12px; font-weight: 650;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+.tag.pr1 { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.tag.pr2 { background: var(--accent-soft); border-color: var(--accent-soft); }
+.tag.pr3 { border-color: var(--accent); }
+
+#panel { flex: 0 0 410px; width: 410px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px 18px; position: sticky; top: 10px; max-height: calc(100vh - 20px); overflow: auto;
+  box-shadow: var(--shadow); font-size: 14px; }
+#panel[hidden] { display: none; }
+#panel .close { float: right; border: 0; background: none; font-size: 20px; line-height: 1; color: var(--muted); padding: 2px 6px; }
+#panel .back { border: 0; background: none; color: var(--accent); padding: 0; font-size: 13px; margin-bottom: 6px; }
+#panel h2 { font-size: 17px; line-height: 1.3; margin: 0 0 2px; }
+#panel h3 { font-size: 13.5px; font-weight: 650; margin: 18px 0 4px; }
+#panel p { margin: 4px 0; }
+#panel .who { display: flex; gap: 12px; align-items: center; }
+#panel .who img, #panel .who .ph { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; flex: none;
+  background: var(--chip); display: grid; place-items: center; color: var(--muted); font-weight: 650; font-size: 22px; }
+#panel .sub { font-size: 13px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 2px; }
+.actions a { font-size: 13px; text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px;
+  color: var(--text); background: var(--bg); }
+.actions a:hover { border-color: var(--accent); color: var(--accent); }
+.actions a.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.pchips button { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 10px 2px 3px;
+  font-size: 13px; display: inline-flex; gap: 6px; align-items: center; margin: 0 5px 5px 0; }
+.pchips button:hover { border-color: var(--accent); }
+.pchips img, .pchips .ph { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--chip);
+  display: grid; place-items: center; font-size: 10px; color: var(--muted); }
+.why { background: var(--accent-soft); border-radius: 8px; padding: 8px 10px; }
+blockquote { margin: 0 0 10px; }
+blockquote mark { background: var(--mark); color: var(--text); padding: 1px 2px; border-radius: 2px;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+blockquote .pg { font-size: 12.5px; white-space: nowrap; }
+blockquote .cm { display: block; margin-top: 3px; font-size: 13px; }
+.note { font-size: 13px; font-style: italic; }
+.error { color: var(--warn); }
+/* list layout: one row per person or paper, for skimming and for phones */
+#map.list { display: block; }
+#map.list .cluster { background: none; border: 0; box-shadow: none; padding: 0; margin: 0 0 14px; }
+#map.list .cluster h2 { position: sticky; top: var(--sticky, 0px); background: var(--bg); padding: 6px 2px; margin: 0; z-index: 2; font-size: 14px; }
+#map.list .nodes { display: block; width: auto !important; }
+.row { display: flex; gap: 11px; align-items: center; width: 100%; text-align: left; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; margin-bottom: 6px; }
+.row .avatar { width: 46px; height: 46px; flex: none; font-size: 15px; }
+.row .main { flex: 1; min-width: 0; }
+.row .nm { font-weight: 650; font-size: 15px; line-height: 1.25; }
+.row .sub { font-size: 13px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.row .side { flex: none; text-align: right; font-size: 13px; line-height: 1.35; }
+.row .side b { display: block; font-weight: 650; }
+.row.sched .avatar { box-shadow: 0 0 0 3px var(--accent); }
+.row.extra { opacity: .7; }
+.row.sel { border-color: var(--text); }
+.row.rel { border-color: var(--warn); }
+#map.list.finding .node:not(.match), #map.list.finding .cluster.nomatch { display: none; }
+#map.list.finding .node.match { opacity: 1; }
+
+.notes { width: 100%; min-height: 110px; font: inherit; font-size: 14px; line-height: 1.45; padding: 8px 10px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+.notes:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.notetext { white-space: pre-wrap; background: var(--mark); border-radius: 8px; padding: 8px 10px; }
+.saved { font-size: 12.5px; min-height: 18px; }
+details.pp { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin-bottom: 7px; background: var(--panel); }
+details.pp summary { cursor: pointer; font-weight: 650; font-size: 13.5px; line-height: 1.3; }
+details.pp .m { font-size: 12.5px; margin: 5px 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+details.pp .why { margin: 6px 0 8px; font-size: 13.5px; }
+details.pp blockquote { font-size: 13.5px; }
+details.pp .more { border: 0; background: none; color: var(--accent); padding: 0; font-size: 13px; }
+
+#lock { max-width: 420px; margin: 12vh auto 0; padding: 0 20px; }
+#lock[hidden] { display: none; }
+#lock h2 { font-size: 20px; margin: 0 0 6px; }
+#lock input[type=password] { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; margin: 12px 0 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+#lock button { font-size: 16px; padding: 9px 16px; background: var(--accent); color: var(--panel); border: 0; border-radius: 8px; }
+#lock .check { margin: 4px 0 14px; font-size: 14px; }
+body.static .local, body:not(.static) .static-only { display: none !important; }
+body.locked header, body.locked .controls, body.locked #summary, body.locked .stage { display: none; }
+
+@media (max-width: 900px) {
+  header, .controls, #summary { padding-left: 16px; padding-right: 16px; }
+  .stage { flex-direction: column; padding: 0 16px 40px; }
+  #panel { position: static; width: 100%; flex: none; max-height: none; order: -1; }
+}
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  header { padding: 10px 12px 2px; gap: 4px 8px; }
+  header h1 { font-size: 16px; }
+  .tabs button { padding: 5px 9px; }
+  #status { flex: 1 1 auto; min-width: 0; font-size: 11.5px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #forget { padding: 3px 8px; font-size: 12px; }
+  .controls { padding: 6px 12px 8px; gap: 8px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
+  .controls .lab { display: none; }
+  .controls > span { max-width: 100%; }
+  #find { order: -1; width: 100%; font-size: 16px; padding: 10px 12px; border-radius: 10px; }
+  .seg { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
+  .seg button { padding: 7px 11px; font-size: 14px; white-space: nowrap; flex: none; }
+  .legend, #summary { display: none; }
+  .stage { padding: 0 12px 40px; display: block; }
+  #panel { position: fixed; inset: 0; width: auto; max-height: none; border-radius: 0; border: 0; z-index: 30;
+    padding: 14px 16px 60px; font-size: 16px; overflow: auto; -webkit-overflow-scrolling: touch; }
+  #panel .close { font-size: 32px; padding: 0 6px; }
+  #panel .who img, #panel .who .ph { width: 60px; height: 60px; }
+}
+@media (prefers-reduced-motion: reduce) { .node { transition: none; } }
+</style>
+<meta name="robots" content="noindex, nofollow">
+<script>window.FLYOUTS_STATIC = true;</script>
+</head>
+<body>
+<form id="lock" hidden>
+  <h2>Flyouts</h2>
+  <div>Enter the passphrase to open your interview notes.</div>
+  <input type="password" id="pass" autocomplete="current-password" aria-label="Passphrase" autofocus>
+  <label class="check"><input type="checkbox" id="keep" checked> Remember on this device</label>
+  <div><button type="submit">Open</button></div>
+  <p id="lockMsg" class="error"></p>
+</form>
+<header>
+  <h1>Flyouts</h1>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <span id="status">Loading…</span>
+  <button class="btn local" id="refresh" title="Re-read the rosters, reading lists and vault notes. New Zotero highlights arrive with the daily sync.">Refresh</button>
+  <button class="btn local" id="publish" hidden title="Encrypt the current map and notes and push them to your website">Update phone copy</button>
+  <a class="local" href="/">Library search</a>
+  <button class="btn static-only" id="forget" title="Forget the passphrase on this device">Lock</button>
+</header>
+<div class="controls">
+  <span><span class="lab">Show</span><span class="seg" id="viewSeg">
+    <button data-view="people">People</button><button data-view="papers">Papers</button></span></span>
+  <span><span class="lab">As</span><span class="seg" id="layoutSeg">
+    <button data-layout="map">Map</button><button data-layout="list">List</button></span></span>
+  <span><span class="lab">Group by</span><span class="seg" id="groupSeg"></span></span>
+  <label class="check" id="allWrap"><input type="checkbox" id="all"> Everyone in the roster</label>
+  <input id="find" type="search" placeholder="Search names, notes, papers" autocomplete="off">
+  <span class="legend" id="legend"></span>
+</div>
+<div id="summary"></div>
+<div class="stage">
+  <div id="mapWrap"><div id="map"></div><svg id="links" aria-hidden="true"></svg></div>
+  <aside id="panel" hidden></aside>
+</div>
+<div id="tip" role="tooltip"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const PRIORITY = { "read closely": ["Read closely", "pr1"], "read key sections": ["Read key sections", "pr2"],
+                   "skim": ["Skim", "pr3"], "backup": ["Backup", "pr4"] };
+const STATIC = !!window.FLYOUTS_STATIC;   // the read-only phone copy (see flyout_publish.py)
+const NARROW = matchMedia("(max-width: 760px)").matches;
+const CAN_HOVER = matchMedia("(hover: hover)").matches;
+const DAYS = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" };
+const state = { data: null, school: null, view: "people", layout: NARROW ? "list" : "map", group: {}, all: false,
+                sel: null, find: "", photos: {} };
+document.body.classList.toggle("static", STATIC);
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  return el;
+}
+const remember = {
+  get(key) { try { return JSON.parse(localStorage.getItem("flyouts:" + key)); } catch (e) { return null; } },
+  set(key, value) { try { localStorage.setItem("flyouts:" + key, JSON.stringify(value)); } catch (e) { /* optional */ } },
+};
+const school = () => state.data.schools.find((s) => s.name === state.school);
+const byId = (list) => new Map(list.map((x) => [x.id, x]));
+const obsidian = (note) => `obsidian://open?vault=${encodeURIComponent(state.data.vault)}&file=${encodeURIComponent(note)}`;
+const initials = (name) => name.replace(/\([^)]*\)/g, " ").split(/\s+/).filter(Boolean).map((w) => w[0]).filter((c) => /\p{L}/u.test(c))
+  .filter((_, i, a) => i === 0 || i === a.length - 1).join("").toUpperCase();
+function shortName(name) {
+  const nick = (name.match(/\(([^)]+)\)/) || [])[1];
+  const words = name.replace(/\([^)]*\)/g, " ").split(/\s+/).filter(Boolean);
+  if (words.length < 2) return name;
+  const first = words[0].includes(".") && nick ? nick : words[0];
+  return `${first} ${words[words.length - 1]}`;
+}
+function slot(p) {
+  const time = (p.meeting || "").match(/\b\d{1,2}:\d{2}/);
+  if (time) {
+    const day = p.meeting.slice(0, time.index).match(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/);
+    return `${day ? day[1] + " " : ""}${time[0]}`;
+  }
+  return p.on_schedule ? (p.meeting || "").split(/[(.;,]/)[0].trim().slice(0, 18) : "";
+}
+const photoSrc = (p) => !p.photo ? "" : STATIC ? (state.photos[p.photo] || "") : `/flyouts/photo/${p.photo}`;
+const photo = (p, cls) => photoSrc(p)
+  ? h("img", { src: photoSrc(p), alt: "", loading: "lazy", class: cls || null })
+  : h("span", { class: "ph" + (cls ? " " + cls : "") }, initials(p.name));
+const prio = (paper) => PRIORITY[paper.priority] || null;
+const venueYear = (x) => [x.venue, x.year && !String(x.venue).includes(x.year) ? x.year : null].filter(Boolean).join(" ");
+const authorsShort = (a) => a.length > 3 ? `${a.slice(0, 3).join(", ")}, et al.` : a.join(", ");
+
+// ----- data ---------------------------------------------------------------------------
+async function decryptFile(name, passphrase) {
+  const response = await fetch(name, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Could not download ${name}.`);
+  const file = new Uint8Array(await response.arrayBuffer());
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: file.slice(4, 20), iterations: 600000, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  let plain;
+  try { plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: file.slice(20, 32) }, key, file.slice(32)); }
+  catch (e) { const err = new Error("That passphrase did not work."); err.wrong = true; throw err; }
+  const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  return JSON.parse(text);
+}
+function askPassphrase(message) {
+  return new Promise((resolve) => {
+    const form = $("lock");
+    document.body.classList.add("locked"); form.hidden = false; $("lockMsg").textContent = message || ""; $("pass").value = ""; $("pass").focus();
+    form.onsubmit = (e) => { e.preventDefault(); if ($("pass").value) resolve({ passphrase: $("pass").value, keep: $("keep").checked }); };
+  });
+}
+async function loadStatic() {
+  let passphrase = remember.get("passphrase"), keep = true, message = "";
+  for (;;) {
+    if (!passphrase) ({ passphrase, keep } = await askPassphrase(message));
+    $("lockMsg").textContent = "Opening…";
+    try {
+      const data = await decryptFile("data.enc", passphrase);
+      if (keep) remember.set("passphrase", passphrase);
+      $("lock").hidden = true; document.body.classList.remove("locked");
+      decryptFile("photos.enc", passphrase).then((photos) => { state.photos = photos; render(); }).catch(() => {});
+      return data;
+    } catch (err) {
+      if (!err.wrong) throw err;
+      remember.set("passphrase", null); passphrase = null; message = err.message;
+    }
+  }
+}
+async function loadLocal() {
+  const response = await fetch("/api/flyouts");
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Could not load the flyout data.");
+  fetch("/api/flyouts/status").then((r) => r.json()).then((s) => { $("publish").hidden = !s.publish; }).catch(() => {});
+  return data;
+}
+function dayGrouping(s) {   // people by the day of their first meeting
+  const of = {}, days = [];
+  for (const p of s.people) {
+    const time = (p.meeting || "").match(/\b\d{1,2}:\d{2}/);
+    const day = time && p.meeting.slice(0, time.index).match(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/);
+    of[p.id] = day ? DAYS[day[1]] : p.on_schedule ? "On your schedule" : "";
+    if (of[p.id] && !days.includes(of[p.id])) days.push(of[p.id]);
+  }
+  const order = [...Object.values(DAYS), "On your schedule"].filter((d) => days.includes(d));
+  return order.length ? { id: "day", label: "Schedule", groups: order, rest: "Not on your schedule", of } : null;
+}
+async function load() {
+  const data = STATIC ? await loadStatic() : await loadLocal();
+  state.data = data;
+  for (const s of data.schools) {
+    s.personById = byId(s.people); s.paperById = byId(s.papers);
+    const day = dayGrouping(s);
+    if (day && !s.people_groupings.some((g) => g.id === "day")) s.people_groupings.push(day);
+  }
+  const fromHash = decodeURIComponent(location.hash.slice(1)).split("/");
+  const names = data.schools.map((s) => s.name);
+  state.school = names.includes(fromHash[0]) ? fromHash[0] : (names.includes(remember.get("school")) ? remember.get("school") : names[0]);
+  if (["people", "papers"].includes(fromHash[1])) state.view = fromHash[1];
+  state.group = remember.get("group") || {};
+  if (["map", "list"].includes(remember.get(NARROW ? "layoutNarrow" : "layout"))) state.layout = remember.get(NARROW ? "layoutNarrow" : "layout");
+  $("status").textContent = data.schools.length ? `Updated ${data.built.replace("T", " ").slice(0, 16)}` : "";
+  render();
+}
+
+function related(sel, s) {   // ids of nodes in the current view tied to the selection
+  const out = new Set();
+  if (!sel) return out;
+  if (sel.type === "person") {
+    const person = s.personById.get(sel.id);
+    if (!person) return out;
+    if (state.view === "papers") person.papers.forEach((id) => out.add(id));
+    else person.papers.forEach((id) => (s.paperById.get(id)?.people || []).forEach((p) => p !== sel.id && out.add(p)));
+  } else {
+    const paper = s.paperById.get(sel.id);
+    if (!paper) return out;
+    if (state.view === "people") paper.people.forEach((id) => out.add(id));
+    else paper.people.forEach((pid) => (s.personById.get(pid)?.papers || []).forEach((id) => id !== sel.id && out.add(id)));
+  }
+  return out;
+}
+
+// ----- drawing -------------------------------------------------------------------------
+function render() {
+  const data = state.data, map = $("map");
+  $("tabs").replaceChildren(...data.schools.map((s) => h("button", {
+    role: "tab", "aria-selected": String(s.name === state.school),
+    onclick: () => { state.school = s.name; state.sel = null; remember.set("school", s.name); render(); } }, s.name)));
+  if (!data.schools.length) {
+    map.replaceChildren(h("p", { class: "empty" },
+      "No live schools. Add papers to a subcollection of “Flyout Pre-reads” in Zotero, or a “<School> Flyout” folder to the prep materials."));
+    return;
+  }
+  const s = school(), people = state.view === "people";
+  history.replaceState(null, "", `#${encodeURIComponent(s.name)}/${state.view}`);
+  document.title = `${s.name} · Flyouts`;
+  for (const b of $("viewSeg").children) b.setAttribute("aria-pressed", String(b.dataset.view === state.view));
+  for (const b of $("layoutSeg").children) b.setAttribute("aria-pressed", String(b.dataset.layout === state.layout));
+  const list = state.layout === "list";
+  map.classList.toggle("list", list);
+  document.documentElement.style.setProperty("--sticky", NARROW ? document.querySelector(".controls").offsetHeight + "px" : "0px");
+
+  const groupings = people ? s.people_groupings : s.paper_groupings;
+  const key = `${s.name}/${state.view}/${state.layout}`;
+  const grouping = groupings.find((g) => g.id === state.group[key])
+    || (list && people && groupings.find((g) => g.id === "day")) || groupings[0];
+  $("groupSeg").replaceChildren(...groupings.map((g) => h("button", {
+    "aria-pressed": String(g === grouping),
+    onclick: () => { state.group[key] = g.id; remember.set("group", state.group); render(true); } }, g.label)));
+  const hasExtras = s.people.some((p) => !p.shown);
+  $("allWrap").style.display = people && hasExtras ? "" : "none";
+  $("all").checked = state.all;
+
+  const items = people ? s.people.filter((p) => state.all || p.shown) : s.papers;
+  const before = new Map([...map.querySelectorAll(".node")].map((n) => [n.dataset.id, n.getBoundingClientRect()]));
+  const rel = related(state.sel, s);
+  const clusters = [];
+  const names = grouping ? [...grouping.groups, grouping.rest] : [""];
+  for (const name of names) {
+    const members = items.filter((x) => !grouping || (grouping.of[x.id] || grouping.rest) === name);
+    if (!members.length) continue;
+    const cols = people ? Math.max(2, Math.min(8, Math.ceil(Math.sqrt(members.length * 1.7))))
+                        : Math.max(1, Math.min(4, Math.ceil(Math.sqrt(members.length))));
+    const width = people ? cols * 88 + (cols - 1) * 4 : cols * 184 + (cols - 1) * 8;
+    clusters.push(h("section", { class: "cluster" },
+      h("h2", {}, name || "All", h("span", { class: "n" }, String(members.length))),
+      h("div", { class: `nodes ${state.view}`, style: `width:${width}px;max-width:100%` },
+        members.map((x) => list ? (people ? personRow(x, s, rel) : paperRow(x, s, rel))
+                                : (people ? personNode(x, s, rel) : paperNode(x, s, rel))))));
+  }
+  map.replaceChildren(...(clusters.length ? clusters : [h("p", { class: "empty" }, "Nothing to show here yet.")]));
+  applyFind();
+  if (arguments[0] === true) animate(before);
+  drawSummary(s, people);
+  drawPanel();
+  clearLinks();
+}
+
+function personNode(p, s, rel) {
+  const papers = p.papers.map((id) => s.paperById.get(id)).filter(Boolean);
+  const read = papers.filter((x) => x.highlights.length).length;
+  const cls = ["node", "person", p.on_schedule ? "sched" : "", p.shown ? "" : "extra",
+    state.sel?.type === "person" && state.sel.id === p.id ? "sel" : "", rel.has(p.id) ? "rel" : ""].filter(Boolean).join(" ");
+  const label = `${p.name}${p.title ? ", " + p.title : ""}${p.meeting ? ". Meeting: " + p.meeting : ""}`;
+  return node(h("button", { class: cls, "data-id": p.id, "aria-label": label },
+    h("span", { class: "avatar" }, photoSrc(p) ? photo(p) : initials(p.name),
+      papers.length ? h("span", { class: "count" + (read === papers.length ? " done" : "") }, String(papers.length)) : null),
+    h("span", { class: "pname" }, shortName(p.name)),
+    slot(p) ? h("span", { class: "pslot" }, slot(p)) : null), { type: "person", id: p.id });
+}
+
+function personRow(p, s, rel) {
+  const papers = p.papers.map((id) => s.paperById.get(id)).filter(Boolean);
+  const marks = papers.reduce((n, x) => n + x.highlights.length, 0);
+  const cls = ["node", "row", p.on_schedule ? "sched" : "", p.shown ? "" : "extra",
+    state.sel?.type === "person" && state.sel.id === p.id ? "sel" : "", rel.has(p.id) ? "rel" : ""].filter(Boolean).join(" ");
+  return node(h("button", { class: cls, "data-id": p.id },
+    h("span", { class: "avatar" }, photoSrc(p) ? photo(p) : initials(p.name)),
+    h("span", { class: "main" }, h("div", { class: "nm" }, p.name), h("div", { class: "sub" }, p.title)),
+    h("span", { class: "side" }, slot(p) ? h("b", {}, slot(p)) : null,
+      [p.my_notes ? "notes" : null, marks ? `${marks} highlights` : (papers.length ? `${papers.length} paper${papers.length > 1 ? "s" : ""}` : null)]
+        .filter(Boolean).join(" · "))), { type: "person", id: p.id });
+}
+function paperRow(x, s, rel) {
+  const pr = prio(x);
+  const cls = ["node", "row", state.sel?.type === "paper" && state.sel.id === x.id ? "sel" : "", rel.has(x.id) ? "rel" : ""]
+    .filter(Boolean).join(" ");
+  return node(h("button", { class: cls, "data-id": x.id },
+    h("span", { class: "main" }, h("div", { class: "nm" }, x.title),
+      h("div", { class: "sub" }, pr ? h("span", { class: "tag " + pr[1] }, pr[0]) : null, pr ? " " : null, x.cite)),
+    h("span", { class: "side" }, x.highlights.length ? h("b", {}, `${x.highlights.length} highlights`) : null,
+      x.in_zotero ? null : "not in Zotero")), { type: "paper", id: x.id });
+}
+
+function paperNode(x, s, rel) {
+  const pr = prio(x);
+  const cls = ["node", "paper", pr ? pr[1] : "", x.in_zotero ? "" : "absent",
+    state.sel?.type === "paper" && state.sel.id === x.id ? "sel" : "", rel.has(x.id) ? "rel" : ""].filter(Boolean).join(" ");
+  return node(h("button", { class: cls, "data-id": x.id, "aria-label": `${x.cite}: ${x.title}` },
+    h("span", { class: "cite" }, x.cite, x.highlights.length ? h("span", { class: "hl" }, `✓ ${x.highlights.length}`) : null),
+    h("span", { class: "ptitle" }, x.title)), { type: "paper", id: x.id });
+}
+
+function node(el, ref) {
+  el.addEventListener("click", () => select(ref));
+  el.addEventListener("mouseenter", () => hover(el, ref));
+  el.addEventListener("mouseleave", unhover);
+  el.addEventListener("focus", () => hover(el, ref));
+  el.addEventListener("blur", unhover);
+  return el;
+}
+
+function animate(before) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const n of $("map").querySelectorAll(".node")) {
+    const was = before.get(n.dataset.id);
+    if (!was) { n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 }); continue; }
+    const now = n.getBoundingClientRect();
+    const dx = was.left - now.left, dy = was.top - now.top;
+    if (dx || dy) n.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+      { duration: 420, easing: "cubic-bezier(.2,.7,.2,1)" });
+  }
+}
+
+function drawSummary(s, people) {
+  const shown = s.people.filter((p) => p.shown), sched = s.people.filter((p) => p.on_schedule).length;
+  const read = s.papers.filter((p) => p.highlights.length).length, absent = s.papers.filter((p) => !p.in_zotero).length;
+  const parts = [s.visit ? `Visit ${s.visit}` : null,
+    `${shown.length} people on your schedule or reading list (${sched} on the schedule)` +
+      (s.people.length > shown.length ? `, ${s.people.length - shown.length} more in the roster` : ""),
+    `${s.papers.length} papers, ${read} highlighted` + (absent ? `, ${absent} not in Zotero yet` : "")];
+  $("summary").textContent = parts.filter(Boolean).join(" · ");
+  const item = (cls, text) => h("span", {}, h("i", { class: "swatch " + cls }), text);
+  $("legend").replaceChildren(...(people
+    ? [item("ring", "on your schedule"), item("badge", "papers on your list"), item("done", "all highlighted")]
+    : [item("sq pr1", "read closely"), item("sq pr2", "key sections"), item("sq pr3", "skim"),
+       item("sq", "backup or unlisted"),
+       absent ? item("dash", "not in Zotero") : null].filter(Boolean)));
+}
+
+// ----- find ------------------------------------------------------------------------------
+function applyFind() {
+  const q = state.find.trim().toLowerCase(), s = school(), map = $("map");
+  map.classList.toggle("finding", !!q);
+  if (!q) return;
+  for (const n of map.querySelectorAll(".node")) {
+    const x = s.personById.get(n.dataset.id) || s.paperById.get(n.dataset.id);
+    const text = x.name ? [x.name, x.title, x.brief, x.keywords.join(" "), x.unit, x.expertise.join(" "), x.my_notes,
+                           ...x.papers.map((id) => { const pp = s.paperById.get(id); return pp ? `${pp.cite} ${pp.title}` : ""; })]
+                        : [x.cite, x.title, x.authors.join(" "), x.keywords.join(" "), x.covers, x.why,
+                           ...x.highlights.map((q) => `${q.text} ${q.comment}`)];
+    n.classList.toggle("match", text.join(" ").toLowerCase().includes(q));
+  }
+  for (const c of map.querySelectorAll(".cluster")) c.classList.toggle("nomatch", !c.querySelector(".node.match"));
+}
+
+// ----- hover -------------------------------------------------------------------------------
+function hover(el, ref) {
+  if (!CAN_HOVER || state.layout === "list") return;
+  const s = school(), map = $("map"), tip = $("tip");
+  const hot = related(ref, s); hot.add(ref.id);
+  map.classList.toggle("hovering", hot.size > 1);   // fade the rest only when there is something to connect
+  for (const n of map.querySelectorAll(".node")) n.classList.toggle("hot", hot.has(n.dataset.id));
+  drawLinks(el, hot);
+  tip.replaceChildren(...(ref.type === "person" ? personTip(s.personById.get(ref.id), s) : paperTip(s.paperById.get(ref.id), s))
+    .filter(Boolean));
+  tip.style.display = "block";
+  const r = el.getBoundingClientRect(), w = tip.offsetWidth, ht = tip.offsetHeight;
+  let left = r.right + 10;
+  if (left + w > innerWidth - 8) left = r.left - w - 10;
+  if (left < 8) left = Math.max(8, Math.min(innerWidth - w - 8, r.left));
+  let top = Math.min(Math.max(8, r.top - 6), innerHeight - ht - 8);
+  if (left === Math.max(8, Math.min(innerWidth - w - 8, r.left)) && left + w > r.left && left < r.right) top = r.bottom + 8;
+  tip.style.left = left + "px"; tip.style.top = Math.max(8, top) + "px";
+}
+function unhover() {
+  $("map").classList.remove("hovering");
+  $("tip").style.display = "none";
+  clearLinks();
+}
+function clearLinks() { $("links").replaceChildren(); }
+function drawLinks(el, hot) {
+  const svg = $("links"), base = $("mapWrap").getBoundingClientRect();
+  const center = (n) => { const r = (n.querySelector(".avatar") || n).getBoundingClientRect();
+    return [r.left + r.width / 2 - base.left, r.top + r.height / 2 - base.top]; };
+  const [x1, y1] = center(el);
+  clearLinks();
+  for (const n of $("map").querySelectorAll(".node.hot")) {
+    if (n === el) continue;
+    const [x2, y2] = center(n);
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", x1); line.setAttribute("y1", y1); line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+    svg.append(line);
+  }
+}
+function personTip(p, s) {
+  const papers = p.papers.map((id) => s.paperById.get(id)).filter(Boolean);
+  const read = papers.filter((x) => x.highlights.length).length;
+  return [
+    h("div", { class: "top" }, photo(p), h("div", {}, h("div", { class: "nm" }, p.name),
+      h("div", { class: "sub" }, p.title), h("div", { class: "sub" }, [p.unit, p.track].filter(Boolean).join(" · ")))),
+    p.meeting ? h("p", { class: "kv" }, h("b", {}, "Meeting: "), p.meeting) : null,
+    p.brief ? h("p", { class: "clamp" }, p.brief) : null,
+    p.keywords.length ? h("div", { class: "chips" }, p.keywords.slice(0, 6).map((k) => h("span", { class: "chip" }, k))) : null,
+    h("p", { class: "kv" }, papers.length
+      ? `${papers.length} paper${papers.length > 1 ? "s" : ""} on your list, ${read} highlighted. Click for details.`
+      : "No papers on your list. Click for details."),
+  ];
+}
+function paperTip(x, s) {
+  const pr = prio(x);
+  const people = x.people.map((id) => s.personById.get(id)).filter(Boolean);
+  return [
+    h("div", { class: "nm" }, x.title),
+    h("div", { class: "sub" }, [authorsShort(x.authors), venueYear(x)].filter(Boolean).join(" · ")),
+    h("p", {}, pr ? h("span", { class: "tag " + pr[1] }, pr[0]) : null, pr ? " " : null,
+      h("span", { class: "kv" }, [x.number, x.in_zotero ? `${x.highlights.length} highlight${x.highlights.length === 1 ? "" : "s"}` : "not in Zotero yet"]
+        .filter(Boolean).join(" · "))),
+    people.length ? h("p", { class: "kv" }, h("b", {}, "People: "), people.map((p) => shortName(p.name)).join(", ")) : null,
+    (x.why || x.abstract) ? h("p", { class: "clamp" }, x.why || x.abstract) : null,
+  ];
+}
+
+// ----- side panel ----------------------------------------------------------------------------
+function select(ref, from) {
+  state.sel = ref ? { ...ref, from: from || null } : null;
+  unhover();
+  render();
+}
+function drawPanel() {
+  const panel = $("panel"), s = school(), sel = state.sel;
+  const item = sel && (sel.type === "person" ? s.personById.get(sel.id) : s.paperById.get(sel.id));
+  panel.hidden = !item;
+  if (!item) return;
+  const back = sel.from && (sel.from.type === "person" ? s.personById.get(sel.from.id) : s.paperById.get(sel.from.id));
+  panel.replaceChildren(...[
+    h("button", { class: "close", "aria-label": "Close", onclick: () => select(null) }, "×"),
+    back ? h("button", { class: "back", onclick: () => select({ type: sel.from.type, id: sel.from.id }) },
+      `← ${back.name ? shortName(back.name) : back.cite}`) : null,
+    ...(sel.type === "person" ? personPanel(item, s) : paperPanel(item, s))].filter(Boolean));
+  panel.scrollTop = 0;
+}
+const field = (label, value) => value ? [h("h3", {}, label), h("p", {}, value)] : [];
+function highlightBlocks(x) {
+  return x.highlights.map((q) => h("blockquote", {}, h("mark", {}, q.text || "(no text)"), " ",
+    STATIC ? h("span", { class: "pg" }, q.page) : h("a", { class: "pg", href: q.link, title: "Open the PDF at this highlight" }, q.page),
+    q.comment ? h("span", { class: "cm" }, h("b", {}, "My comment: "), q.comment) : null));
+}
+function paperDetails(x, from) {   // a paper inside a person's panel: why it matters and the highlights, ready to skim
+  const pr = prio(x);
+  return h("details", { class: "pp", open: true },
+    h("summary", {}, x.title),
+    h("div", { class: "m" }, pr ? h("span", { class: "tag " + pr[1] }, pr[0]) : null, [x.cite,
+      x.in_zotero ? (x.highlights.length ? `${x.highlights.length} highlights` : "not highlighted yet") : "not in Zotero yet"].join(" · ")),
+    x.why ? h("p", { class: "why" }, x.why) : null,
+    ...highlightBlocks(x),
+    h("button", { class: "more", onclick: () => select({ type: "paper", id: x.id }, from) }, "Abstract and full details →"));
+}
+function notesBox(p, s) {
+  if (STATIC) return p.my_notes ? h("p", { class: "notetext" }, p.my_notes) : h("p", { class: "note" }, "No notes yet. Type them on your Mac.");
+  const status = h("div", { class: "saved" });
+  const box = h("textarea", { class: "notes", placeholder: "Your notes on this person. Saved to their note in Obsidian." });
+  box.value = p.my_notes || "";
+  let timer = null, last = box.value;
+  const save = async () => {
+    clearTimeout(timer);
+    if (box.value === last) return;
+    const text = box.value; status.className = "saved"; status.textContent = "Saving…";
+    try {
+      const response = await fetch("/api/flyouts/note", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ school: s.name, id: p.id, text }) });
+      const out = await response.json();
+      if (!response.ok) throw new Error(out.error || "Could not save.");
+      last = text; p.my_notes = out.my_notes; p.note = out.note;
+      status.textContent = "Saved to Obsidian";
+    } catch (err) { status.className = "saved error"; status.textContent = `Not saved: ${err.message}`; }
+  };
+  box.addEventListener("input", () => { p.my_notes = box.value; status.textContent = ""; clearTimeout(timer); timer = setTimeout(save, 900); });
+  box.addEventListener("blur", save);
+  return [box, status];
+}
+function personPanel(p, s) {
+  const papers = p.papers.map((id) => s.paperById.get(id)).filter(Boolean);
+  return [
+    h("div", { class: "who" }, photo(p), h("div", {}, h("h2", {}, p.name), h("div", { class: "sub" }, p.title),
+      h("div", { class: "sub" }, [p.unit, p.track].filter(Boolean).join(" · ")))),
+    h("div", { class: "actions" },
+      p.note && !STATIC ? h("a", { href: obsidian(p.note) }, "Open note in Obsidian") : null,
+      p.profile ? h("a", { href: p.profile, target: "_blank", rel: "noopener" }, "Profile page") : null),
+    ...field("Meeting", p.meeting),
+    h("h3", {}, "My notes"), notesBox(p, s),
+    h("h3", {}, "On your reading list"),
+    papers.length ? papers.map((x) => paperDetails(x, { type: "person", id: p.id }))
+                  : h("p", { class: "note" }, "No papers by this person on the list."),
+    ...field("About", p.brief),
+    p.keywords.length ? [h("h3", {}, "Research keywords"), h("div", { class: "chips" }, p.keywords.map((k) => h("span", { class: "chip" }, k)))] : [],
+    p.expertise.length ? [h("h3", {}, "Expertise group"), h("p", {}, p.expertise.join("; ") + (p.eg_lead ? ` (${p.eg_lead})` : ""))] : [],
+    ...field("Role in your search", p.search),
+    ...field("Relevance to you", p.relevance ? { A: "A: closest overlap", B: "B: clear link", C: "C: adjacent" }[p.relevance] || p.relevance : ""),
+    ...field("Overlap with you", p.overlap),
+    ...field("Key papers", p.key_papers),
+    ...field("Courses", p.courses),
+    ...field("Degrees", [p.phd, p.undergrad].filter(Boolean).join("; ")),
+  ].flat(2);
+}
+function paperPanel(x, s) {
+  const pr = prio(x);
+  const people = x.people.map((id) => s.personById.get(id)).filter(Boolean);
+  return [
+    h("h2", {}, x.title),
+    h("div", { class: "sub" }, x.authors.join(", ")),
+    h("div", { class: "sub" }, venueYear(x)),
+    h("p", {}, pr ? h("span", { class: "tag " + pr[1] }, pr[0]) : null, x.number ? h("span", { class: "sub" }, ` ${x.number}`) : null),
+    h("div", { class: "actions" },
+      x.pdf && !STATIC ? h("a", { class: "primary", href: x.pdf }, "Open PDF in Zotero") : null,
+      x.zotero && !STATIC ? h("a", { href: x.zotero }, "Show in Zotero") : null,
+      x.note && !STATIC ? h("a", { href: obsidian(x.note) }, "Open note in Obsidian") : null,
+      x.doi ? h("a", { href: `https://doi.org/${x.doi}`, target: "_blank", rel: "noopener" }, "DOI") : null),
+    x.in_zotero ? null : h("p", { class: "note" }, "This paper is on the reading list but not in Zotero. Import the school's reading list (.ris) into its “Flyout Pre-reads” subcollection to get the abstract and highlights here."),
+    people.length ? [h("h3", {}, "People"), h("div", { class: "pchips" }, people.map((p) =>
+      h("button", { onclick: () => select({ type: "person", id: p.id }, { type: "paper", id: x.id }) }, photo(p), shortName(p.name))))] : [],
+    x.covers ? [h("h3", {}, "Covers"), h("p", {}, x.covers)] : [],
+    x.why ? [h("h3", {}, "Why it matters"), h("p", { class: "why" }, x.why)] : [],
+    x.in_zotero ? [h("h3", {}, `Highlights (${x.highlights.length})`),
+      x.highlights.length ? highlightBlocks(x)
+      : h("p", { class: "note" }, "No highlights yet. Highlights made in Zotero appear here after the next sync.")] : [],
+    x.my_notes ? [h("h3", {}, "My notes"), h("p", {}, x.my_notes)] : [],
+    x.zotero_notes ? [h("h3", {}, "Zotero notes"), h("p", {}, x.zotero_notes)] : [],
+    x.abstract ? [h("h3", {}, "Abstract"), h("p", {}, x.abstract)] : (x.in_zotero ? [h("h3", {}, "Abstract"), h("p", { class: "note" }, "No abstract in Zotero for this paper.")] : []),
+    x.keywords.length ? [h("h3", {}, "Keywords"), h("div", { class: "chips" }, x.keywords.slice(0, 10).map((k) => h("span", { class: "chip" }, k)))] : [],
+  ].flat(2).filter(Boolean);
+}
+
+// ----- controls ------------------------------------------------------------------------------
+for (const b of $("viewSeg").children) b.addEventListener("click", () => { state.view = b.dataset.view; render(); });
+for (const b of $("layoutSeg").children) b.addEventListener("click", () => {
+  state.layout = b.dataset.layout; remember.set(NARROW ? "layoutNarrow" : "layout", state.layout); render(); });
+$("forget").addEventListener("click", () => { remember.set("passphrase", null); location.reload(); });
+$("publish").addEventListener("click", async () => {
+  const button = $("publish"), status = $("status");
+  button.disabled = true; status.className = ""; status.textContent = "Updating the phone copy…";
+  try {
+    const response = await fetch("/api/flyouts/publish", { method: "POST" });
+    const out = await response.json();
+    if (!response.ok) throw new Error(out.error || "Could not update the phone copy.");
+    status.textContent = out.summary;
+  } catch (err) { status.className = "error"; status.textContent = err.message; }
+  button.disabled = false;
+});
+$("all").addEventListener("change", (e) => { state.all = e.target.checked; render(true); });
+$("find").addEventListener("input", (e) => { state.find = e.target.value; applyFind(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sel) select(null); });
+addEventListener("scroll", unhover, { passive: true });
+$("refresh").addEventListener("click", async () => {
+  const button = $("refresh"), status = $("status");
+  button.disabled = true; status.className = ""; status.textContent = "Refreshing…";
+  try {
+    const response = await fetch("/api/flyouts/refresh", { method: "POST" });
+    const out = await response.json();
+    if (!response.ok) throw new Error(out.error || "Refresh failed.");
+    await load();
+  } catch (err) { status.className = "error"; status.textContent = err.message; }
+  button.disabled = false;
+});
+load().catch((err) => { $("status").className = "error"; $("status").textContent = err.message; });
+</script>
+</body>
+</html>
