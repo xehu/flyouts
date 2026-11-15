@@ -42,6 +42,7 @@ button { font: inherit; color: var(--text); cursor: pointer; }
 .seg button { border: 0; background: none; padding: 5px 11px; font-size: 13px; border-right: 1px solid var(--line); }
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+.seg button:disabled { opacity: .45; cursor: default; }
 #find { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
   background: var(--panel); color: var(--text); width: 230px; }
 #find:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
@@ -256,7 +257,8 @@ body.locked header, body.locked .controls, body.locked #summary, body.locked .st
   <span><span class="lab">As</span><span class="seg" id="layoutSeg">
     <button data-layout="map">Map</button><button data-layout="list">List</button></span></span>
   <span><span class="lab">Group by</span><span class="seg" id="groupSeg"></span></span>
-  <label class="check" id="allWrap"><input type="checkbox" id="all"> Everyone in the roster</label>
+  <span id="whoWrap"><span class="lab">Who</span><span class="seg" id="whoSeg">
+    <button data-who="sched" title="Only people on your visit schedule">On schedule</button><button data-who="list" title="People on your schedule, plus authors of reading-list papers">+ Reading list</button><button data-who="all" title="The whole roster">Everyone</button></span></span>
   <input id="find" type="search" placeholder="Search names, notes, papers" autocomplete="off">
   <span class="legend" id="legend"></span>
 </div>
@@ -274,7 +276,7 @@ const STATIC = !!window.FLYOUTS_STATIC;   // the read-only phone copy (see flyou
 const NARROW = matchMedia("(max-width: 760px)").matches;
 const CAN_HOVER = matchMedia("(hover: hover)").matches;
 const DAYS = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" };
-const state = { data: null, school: null, view: "people", layout: NARROW ? "list" : "map", group: {}, all: false,
+const state = { data: null, school: null, view: "people", layout: NARROW ? "list" : "map", group: {}, who: "list",
                 sel: null, find: "", photos: {} };
 document.body.classList.toggle("static", STATIC);
 
@@ -391,6 +393,7 @@ async function load() {
   if (!names.includes(state.school)) state.school = !STATIC && names.includes(fromHash[0]) ? fromHash[0] : names[0];
   if (["people", "papers"].includes(fromHash[1])) state.view = fromHash[1];
   state.group = remember.get("group") || {};
+  if (["sched", "list", "all"].includes(remember.get("who"))) state.who = remember.get("who");
   if (["map", "list"].includes(remember.get(NARROW ? "layoutNarrow" : "layout"))) state.layout = remember.get(NARROW ? "layoutNarrow" : "layout");
   $("status").textContent = data.schools.length ? `Updated ${data.built.replace("T", " ").slice(0, 16)}` : "";
   render();
@@ -442,11 +445,15 @@ function render() {
   $("groupSeg").replaceChildren(...groupings.map((g) => h("button", {
     "aria-pressed": String(g === grouping),
     onclick: () => { state.group[key] = g.id; remember.set("group", state.group); render(true); } }, g.label)));
-  const hasExtras = s.people.some((p) => !p.shown);
-  $("allWrap").style.display = people && hasExtras ? "" : "none";
-  $("all").checked = state.all;
-
-  const items = people ? s.people.filter((p) => state.all || p.shown) : s.papers;
+  const scheduled = s.people.some((p) => p.on_schedule);
+  const who = state.who === "sched" && !scheduled ? "list" : state.who;   // no schedule yet: fall back
+  $("whoWrap").style.display = people ? "" : "none";
+  for (const b of $("whoSeg").children) {
+    b.setAttribute("aria-pressed", String(b.dataset.who === who));
+    b.disabled = b.dataset.who === "sched" && !scheduled;
+  }
+  const visible = (p) => who === "all" || (who === "sched" ? p.on_schedule : p.shown);
+  const items = people ? s.people.filter(visible) : s.papers;
   const before = new Map([...map.querySelectorAll(".node")].map((n) => [n.dataset.id, n.getBoundingClientRect()]));
   const rel = related(state.sel, s);
   const clusters = [];
@@ -775,7 +782,8 @@ $("publish").addEventListener("click", async () => {
   } catch (err) { status.className = "error"; status.textContent = err.message; }
   button.disabled = false;
 });
-$("all").addEventListener("change", (e) => { state.all = e.target.checked; render(true); });
+for (const b of $("whoSeg").children) b.addEventListener("click", () => {
+  state.who = b.dataset.who; remember.set("who", state.who); render(true); });
 $("find").addEventListener("input", (e) => { state.find = e.target.value; applyFind(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sel) select(null); });
 addEventListener("scroll", unhover, { passive: true });
