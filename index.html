@@ -191,7 +191,7 @@ details.pp .more { border: 0; background: none; color: var(--accent); padding: 0
 #lock { max-width: 420px; margin: 12vh auto 0; padding: 0 20px; }
 #lock[hidden] { display: none; }
 #lock h2 { font-size: 20px; margin: 0 0 6px; }
-#lock input[type=password] { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; margin: 12px 0 8px;
+#lock #pass { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; margin: 12px 0 8px;
   border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
 #lock button { font-size: 16px; padding: 9px 16px; background: var(--accent); color: var(--panel); border: 0; border-radius: 8px; }
 #lock .check { margin: 4px 0 14px; font-size: 14px; }
@@ -232,7 +232,9 @@ body.locked header, body.locked .controls, body.locked #summary, body.locked .st
 <form id="lock" hidden>
   <h2>Flyouts</h2>
   <div>Enter the passphrase to open your interview notes.</div>
-  <input type="password" id="pass" autocomplete="current-password" aria-label="Passphrase" autofocus>
+  <input type="password" id="pass" autocomplete="current-password" aria-label="Passphrase" autofocus
+         autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label class="check"><input type="checkbox" id="showPass"> Show passphrase</label>
   <label class="check"><input type="checkbox" id="keep" checked> Remember on this device</label>
   <div><button type="submit">Open</button></div>
   <p id="lockMsg" class="error"></p>
@@ -335,7 +337,7 @@ function askPassphrase(message) {
   return new Promise((resolve) => {
     const form = $("lock");
     document.body.classList.add("locked"); form.hidden = false; $("lockMsg").textContent = message || ""; $("pass").value = ""; $("pass").focus();
-    form.onsubmit = (e) => { e.preventDefault(); if ($("pass").value) resolve({ passphrase: $("pass").value, keep: $("keep").checked }); };
+    form.onsubmit = (e) => { e.preventDefault(); $("pass").type = "password"; $("showPass").checked = false; if ($("pass").value) resolve({ passphrase: $("pass").value, keep: $("keep").checked }); };
   });
 }
 async function loadStatic() {
@@ -743,6 +745,7 @@ function paperPanel(x, s) {
 for (const b of $("viewSeg").children) b.addEventListener("click", () => { state.view = b.dataset.view; render(); });
 for (const b of $("layoutSeg").children) b.addEventListener("click", () => {
   state.layout = b.dataset.layout; remember.set(NARROW ? "layoutNarrow" : "layout", state.layout); render(); });
+$("showPass").addEventListener("change", (e) => { $("pass").type = e.target.checked ? "text" : "password"; });
 $("forget").addEventListener("click", () => { remember.set("passphrase", null); location.reload(); });
 $("publish").addEventListener("click", async () => {
   const button = $("publish"), status = $("status");
