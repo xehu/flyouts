@@ -154,6 +154,7 @@ label.check { display: inline-flex; gap: 6px; align-items: center; }
 blockquote { margin: 0 0 10px; }
 blockquote mark { background: var(--mark); color: var(--text); padding: 1px 2px; border-radius: 2px;
   box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+blockquote.pnote { background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; }
 blockquote .pg { font-size: 12.5px; white-space: nowrap; }
 blockquote .cm { display: block; margin-top: 3px; font-size: 13px; }
 .note { font-size: 13px; font-style: italic; }
@@ -674,9 +675,14 @@ function readingNotes(x) {   // notes written in Zotero on this paper
   return (x.zotero_notes || []).map((n) => h("p", { class: "notetext" }, n));
 }
 function highlightBlocks(x) {
-  return x.highlights.map((q) => h("blockquote", {}, h("mark", {}, q.text || "(no text)"), " ",
-    STATIC ? h("span", { class: "pg" }, q.page) : h("a", { class: "pg", href: q.link, title: "Open the PDF at this highlight" }, q.page),
-    q.comment ? h("span", { class: "cm" }, h("b", {}, "My comment: "), q.comment) : null));
+  // Highlights are marked text; a note left on a page stands on its own, in page order.
+  const page = (q) => STATIC ? h("span", { class: "pg" }, q.page)
+    : h("a", { class: "pg", href: q.link, title: "Open the PDF at this place" }, q.page);
+  return x.highlights.map((q) => (q.kind || "highlight") === "highlight"
+    ? h("blockquote", {}, h("mark", {}, q.text || "(no text)"), " ", page(q),
+        q.comment ? h("span", { class: "cm" }, h("b", {}, "My comment: "), q.comment) : null)
+    : h("blockquote", { class: "pnote" }, h("b", {}, q.kind === "note" ? "My note: " : `${q.kind[0].toUpperCase()}${q.kind.slice(1)} `),
+        q.text, " ", page(q)));
 }
 function paperDetails(x, from) {   // a paper inside a person's panel: why it matters and the highlights, ready to skim
   const pr = prio(x);
