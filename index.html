@@ -35,6 +35,7 @@ button { font: inherit; color: var(--text); cursor: pointer; }
 .tabs button { border: 0; background: none; padding: 6px 12px; border-radius: 8px; font-size: 15px; }
 .tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); font-weight: 650; box-shadow: var(--shadow);
   outline: 1px solid var(--line); }
+.tabs .pastlab { align-self: center; font-size: 13px; margin-left: 10px; }
 .controls { padding: 4px 20px 10px; display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 .controls .lab { margin-right: 6px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); flex-wrap: wrap; }
@@ -167,7 +168,7 @@ blockquote .cm { display: block; margin-top: 3px; font-size: 13px; }
 .row .main { flex: 1; min-width: 0; }
 .row .nm { font-weight: 650; font-size: 15px; line-height: 1.25; }
 .row .sub { font-size: 13px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.row .side { flex: none; text-align: right; font-size: 13px; line-height: 1.35; }
+.row .side { flex: none; text-align: right; font-size: 13px; line-height: 1.35; max-width: 40%; }
 .row .side b { display: block; font-weight: 650; }
 .row.sched .avatar { box-shadow: 0 0 0 3px var(--accent); }
 .row.extra { opacity: .7; }
@@ -185,6 +186,7 @@ details.pp { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10p
 details.pp summary { cursor: pointer; font-weight: 650; font-size: 13.5px; line-height: 1.3; }
 details.pp .m { font-size: 12.5px; margin: 5px 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 details.pp .why { margin: 6px 0 8px; font-size: 13.5px; }
+details.pp .notetext { font-size: 13.5px; margin: 6px 0 8px; }
 details.pp blockquote { font-size: 13.5px; }
 details.pp .more { border: 0; background: none; color: var(--accent); padding: 0; font-size: 13px; }
 
@@ -246,7 +248,7 @@ body.locked header, body.locked .controls, body.locked #summary, body.locked .st
   <button class="btn local" id="refresh" title="Re-read the rosters, reading lists and vault notes. New Zotero highlights arrive with the daily sync.">Refresh</button>
   <button class="btn local" id="publish" hidden title="Encrypt the current map and notes and push them to your website">Update phone copy</button>
   <a class="local" href="/">Library search</a>
-  <button class="btn static-only" id="forget" title="Forget the passphrase on this device">Lock</button>
+  <button class="btn static-only" id="forget" title="Forget the passphrase on this device">Log out</button>
 </header>
 <div class="controls">
   <span><span class="lab">Show</span><span class="seg" id="viewSeg">
@@ -385,7 +387,8 @@ async function load() {
   }
   const fromHash = decodeURIComponent(location.hash.slice(1)).split("/");
   const names = data.schools.map((s) => s.name);
-  state.school = names.includes(fromHash[0]) ? fromHash[0] : (names.includes(remember.get("school")) ? remember.get("school") : names[0]);
+  // Schools arrive in visit order, so the first one is the next visit. A link from Obsidian can name a school.
+  if (!names.includes(state.school)) state.school = !STATIC && names.includes(fromHash[0]) ? fromHash[0] : names[0];
   if (["people", "papers"].includes(fromHash[1])) state.view = fromHash[1];
   state.group = remember.get("group") || {};
   if (["map", "list"].includes(remember.get(NARROW ? "layoutNarrow" : "layout"))) state.layout = remember.get(NARROW ? "layoutNarrow" : "layout");
@@ -413,9 +416,11 @@ function related(sel, s) {   // ids of nodes in the current view tied to the sel
 // ----- drawing -------------------------------------------------------------------------
 function render() {
   const data = state.data, map = $("map");
-  $("tabs").replaceChildren(...data.schools.map((s) => h("button", {
-    role: "tab", "aria-selected": String(s.name === state.school),
-    onclick: () => { state.school = s.name; state.sel = null; remember.set("school", s.name); render(); } }, s.name)));
+  const tab = (s) => h("button", { role: "tab", "aria-selected": String(s.name === state.school),
+    onclick: () => { state.school = s.name; state.sel = null; render(); } }, s.name);
+  const past = data.schools.filter((s) => s.past);   // finished visits stay reachable, e.g. for thank-you notes
+  $("tabs").replaceChildren(...data.schools.filter((s) => !s.past).map(tab),
+    ...(past.length ? [h("span", { class: "pastlab" }, "Past:"), ...past.map(tab)] : []));
   if (!data.schools.length) {
     map.replaceChildren(h("p", { class: "empty" },
       "No live schools. Add papers to a subcollection of “Flyout Pre-reads” in Zotero, or a “<School> Flyout” folder to the prep materials."));
@@ -479,17 +484,24 @@ function personNode(p, s, rel) {
     slot(p) ? h("span", { class: "pslot" }, slot(p)) : null), { type: "person", id: p.id });
 }
 
+function highlightCount(papers) {   // "6 highlights from 2 of 3 papers" (+ "reading notes" when a paper has Zotero notes)
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const marks = papers.reduce((n, x) => n + x.highlights.length, 0), read = papers.filter((x) => x.highlights.length).length;
+  if (!papers.length) return null;
+  const noted = papers.some((x) => (x.zotero_notes || []).length) ? " · reading notes" : "";
+  if (!marks) return plural(papers.length, "paper") + noted;
+  return `${plural(marks, "highlight")} from ${read === papers.length ? plural(read, "paper") : `${read} of ${plural(papers.length, "paper")}`}${noted}`;
+}
 function personRow(p, s, rel) {
   const papers = p.papers.map((id) => s.paperById.get(id)).filter(Boolean);
-  const marks = papers.reduce((n, x) => n + x.highlights.length, 0);
   const cls = ["node", "row", p.on_schedule ? "sched" : "", p.shown ? "" : "extra",
     state.sel?.type === "person" && state.sel.id === p.id ? "sel" : "", rel.has(p.id) ? "rel" : ""].filter(Boolean).join(" ");
   return node(h("button", { class: cls, "data-id": p.id },
     h("span", { class: "avatar" }, photoSrc(p) ? photo(p) : initials(p.name)),
     h("span", { class: "main" }, h("div", { class: "nm" }, p.name), h("div", { class: "sub" }, p.title)),
     h("span", { class: "side" }, slot(p) ? h("b", {}, slot(p)) : null,
-      [p.my_notes ? "notes" : null, marks ? `${marks} highlights` : (papers.length ? `${papers.length} paper${papers.length > 1 ? "s" : ""}` : null)]
-        .filter(Boolean).join(" · "))), { type: "person", id: p.id });
+      [p.my_notes ? "notes" : null, highlightCount(papers)].filter(Boolean).map((line) => h("div", {}, line)))),
+    { type: "person", id: p.id });
 }
 function paperRow(x, s, rel) {
   const pr = prio(x);
@@ -535,7 +547,7 @@ function animate(before) {
 function drawSummary(s, people) {
   const shown = s.people.filter((p) => p.shown), sched = s.people.filter((p) => p.on_schedule).length;
   const read = s.papers.filter((p) => p.highlights.length).length, absent = s.papers.filter((p) => !p.in_zotero).length;
-  const parts = [s.visit ? `Visit ${s.visit}` : null,
+  const parts = [s.visit ? `${s.past ? "Past visit" : "Visit"} ${s.visit}` : null,
     `${shown.length} people on your schedule or reading list (${sched} on the schedule)` +
       (s.people.length > shown.length ? `, ${s.people.length - shown.length} more in the roster` : ""),
     `${s.papers.length} papers, ${read} highlighted` + (absent ? `, ${absent} not in Zotero yet` : "")];
@@ -556,8 +568,9 @@ function applyFind() {
   for (const n of map.querySelectorAll(".node")) {
     const x = s.personById.get(n.dataset.id) || s.paperById.get(n.dataset.id);
     const text = x.name ? [x.name, x.title, x.brief, x.keywords.join(" "), x.unit, x.expertise.join(" "), x.my_notes,
-                           ...x.papers.map((id) => { const pp = s.paperById.get(id); return pp ? `${pp.cite} ${pp.title}` : ""; })]
-                        : [x.cite, x.title, x.authors.join(" "), x.keywords.join(" "), x.covers, x.why,
+                           ...x.papers.map((id) => { const pp = s.paperById.get(id);
+                             return pp ? `${pp.cite} ${pp.title} ${pp.zotero_notes.join(" ")}` : ""; })]
+                        : [x.cite, x.title, x.authors.join(" "), x.keywords.join(" "), x.covers, x.why, x.zotero_notes.join(" "),
                            ...x.highlights.map((q) => `${q.text} ${q.comment}`)];
     n.classList.toggle("match", text.join(" ").toLowerCase().includes(q));
   }
@@ -612,8 +625,7 @@ function personTip(p, s) {
     p.meeting ? h("p", { class: "kv" }, h("b", {}, "Meeting: "), p.meeting) : null,
     p.brief ? h("p", { class: "clamp" }, p.brief) : null,
     p.keywords.length ? h("div", { class: "chips" }, p.keywords.slice(0, 6).map((k) => h("span", { class: "chip" }, k))) : null,
-    h("p", { class: "kv" }, papers.length
-      ? `${papers.length} paper${papers.length > 1 ? "s" : ""} on your list, ${read} highlighted. Click for details.`
+    h("p", { class: "kv" }, papers.length ? `On your list: ${highlightCount(papers)}. Click for details.`
       : "No papers on your list. Click for details."),
   ];
 }
@@ -651,6 +663,9 @@ function drawPanel() {
   panel.scrollTop = 0;
 }
 const field = (label, value) => value ? [h("h3", {}, label), h("p", {}, value)] : [];
+function readingNotes(x) {   // notes written in Zotero on this paper
+  return (x.zotero_notes || []).map((n) => h("p", { class: "notetext" }, n));
+}
 function highlightBlocks(x) {
   return x.highlights.map((q) => h("blockquote", {}, h("mark", {}, q.text || "(no text)"), " ",
     STATIC ? h("span", { class: "pg" }, q.page) : h("a", { class: "pg", href: q.link, title: "Open the PDF at this highlight" }, q.page),
@@ -663,6 +678,7 @@ function paperDetails(x, from) {   // a paper inside a person's panel: why it ma
     h("div", { class: "m" }, pr ? h("span", { class: "tag " + pr[1] }, pr[0]) : null, [x.cite,
       x.in_zotero ? (x.highlights.length ? `${x.highlights.length} highlights` : "not highlighted yet") : "not in Zotero yet"].join(" · ")),
     x.why ? h("p", { class: "why" }, x.why) : null,
+    ...readingNotes(x),
     ...highlightBlocks(x),
     h("button", { class: "more", onclick: () => select({ type: "paper", id: x.id }, from) }, "Abstract and full details →"));
 }
@@ -731,11 +747,12 @@ function paperPanel(x, s) {
       h("button", { onclick: () => select({ type: "person", id: p.id }, { type: "paper", id: x.id }) }, photo(p), shortName(p.name))))] : [],
     x.covers ? [h("h3", {}, "Covers"), h("p", {}, x.covers)] : [],
     x.why ? [h("h3", {}, "Why it matters"), h("p", { class: "why" }, x.why)] : [],
+    x.zotero_notes.length ? [h("h3", {}, "My reading notes (from Zotero)"), readingNotes(x)] : [],
     x.in_zotero ? [h("h3", {}, `Highlights (${x.highlights.length})`),
       x.highlights.length ? highlightBlocks(x)
       : h("p", { class: "note" }, "No highlights yet. Highlights made in Zotero appear here after the next sync.")] : [],
     x.my_notes ? [h("h3", {}, "My notes"), h("p", {}, x.my_notes)] : [],
-    x.zotero_notes ? [h("h3", {}, "Zotero notes"), h("p", {}, x.zotero_notes)] : [],
+
     x.abstract ? [h("h3", {}, "Abstract"), h("p", {}, x.abstract)] : (x.in_zotero ? [h("h3", {}, "Abstract"), h("p", { class: "note" }, "No abstract in Zotero for this paper.")] : []),
     x.keywords.length ? [h("h3", {}, "Keywords"), h("div", { class: "chips" }, x.keywords.slice(0, 10).map((k) => h("span", { class: "chip" }, k)))] : [],
   ].flat(2).filter(Boolean);
