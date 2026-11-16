@@ -696,7 +696,7 @@ function paperDetails(x, from) {   // a paper inside a person's panel: why it ma
     h("button", { class: "more", onclick: () => select({ type: "paper", id: x.id }, from) }, "Abstract and full details →"));
 }
 function notesBox(p, s) {
-  if (STATIC) return p.my_notes ? h("p", { class: "notetext" }, p.my_notes) : h("p", { class: "note" }, "No notes yet. Type them on your Mac.");
+  if (STATIC) return h("p", { class: "notetext" }, p.my_notes);   // the read-only copy; shown only when there are notes
   const status = h("div", { class: "saved" });
   const box = h("textarea", { class: "notes", placeholder: "Your notes on this person. Saved to their note in Obsidian." });
   box.value = p.my_notes || "";
@@ -727,7 +727,7 @@ function personPanel(p, s) {
       p.note && !STATIC ? h("a", { href: obsidian(p.note) }, "Open note in Obsidian") : null,
       p.profile ? h("a", { href: p.profile, target: "_blank", rel: "noopener" }, "Profile page") : null),
     ...field("Meeting", p.meeting),
-    h("h3", {}, "My notes"), notesBox(p, s),
+    STATIC && !p.my_notes ? [] : [h("h3", {}, "My notes"), notesBox(p, s)],
     h("h3", {}, "On your reading list"),
     papers.length ? papers.map((x) => paperDetails(x, { type: "person", id: p.id }))
                   : h("p", { class: "note" }, "No papers by this person on the list."),
